@@ -1,0 +1,1 @@
+philipp ALL=(root) NOPASSWD: /usr/local/bin/lact-apply

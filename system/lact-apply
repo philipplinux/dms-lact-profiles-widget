@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# Apply LACT power/clock settings once, then shut LACT down so it can't touch anything else.
+#   sudo lact-apply            re-apply current profile
+#   sudo lact-apply mid        switch to profile "mid" (base = no profile)
+#   sudo lact-apply --list     show profiles
+#   sudo lact-apply edit       run LACT so the GUI can change settings; Enter = save and stop
+set -euo pipefail
+CFG=/etc/lact/config.yaml
+if [ "${1:-}" = "--list" ]; then
+  awk '/^profiles:/{p=1;next} /^[a-z_]+:/{p=0} p && /^  [^ ].*:$/{sub(/:$/,"");sub(/^  /,"");print}' "$CFG"
+  echo "base (no profile)"; grep '^current_profile' "$CFG" || echo "current_profile: base"; exit 0
+fi
+[ "$EUID" -eq 0 ] || exec sudo "$0" "$@"
+systemctl stop lactd 2>/dev/null || true
+systemctl mask --runtime lactd >/dev/null 2>&1 || true
+# SIGKILL (below) leaves the socket behind; remove it unless a daemon is really running
+pgrep -x lact >/dev/null || rm -f /run/lactd.sock
+if [ "${1:-}" = edit ]; then
+  # Daemon runs by hand (lactd stays masked); the GUI talks to its socket. Changes apply live.
+  log=$(mktemp)
+  NO_COLOR=1 lact daemon >"$log" 2>&1 &
+  pid=$!
+  for _ in $(seq 1 30); do grep -qE "using profile|initialized [0-9]+ GPUs" "$log" && break; sleep 1; done
+  echo "LACT running. Open (or reopen) the LACT GUI, change settings, click Apply."
+  echo "Do NOT click Start/Autostart in its Service dialog."
+  read -rp "Press Enter when done to stop LACT and give the fans back to CoolerControl... " _ </dev/tty
+  kill -KILL "$pid"; wait "$pid" 2>/dev/null || true
+  rm -f "$log"
+  systemctl restart coolercontrold
+  echo "done: $(grep '^current_profile' "$CFG" || echo base) | 3090 cap $(nvidia-smi --query-gpu=power.limit --format=csv,noheader)"
+  exit 0
+fi
+if [ -n "${1:-}" ]; then
+  # Exact match against existing profile names only (this script is sudo-NOPASSWD for the DMS widget)
+  if [ "$1" != base ]; then
+    "$0" --list | head -n -2 | grep -qxF -- "$1" || { echo "no profile '$1'"; exit 1; }
+  fi
+  awk -v p="$1" '/^current_profile:/{next} /^auto_switch_profiles:/ && p!="base"{print "current_profile: " p} {print}' "$CFG" > "$CFG.new" && cat "$CFG.new" > "$CFG" && rm -f "$CFG.new"
+fi
+# Run the daemon by hand and SIGKILL it once settings are applied: a clean stop makes LACT
+# "clean up" (power caps back to stock), and while running it re-applies on every display change.
+log=$(mktemp)
+NO_COLOR=1 lact daemon >"$log" 2>&1 &
+pid=$!
+for _ in $(seq 1 30); do grep -qE "using profile|initialized [0-9]+ GPUs" "$log" && break; sleep 1; done
+sleep 6
+kill -KILL "$pid"; wait "$pid" 2>/dev/null || true
+grep -E "WARN|ERROR" "$log" | grep -v "09:00.0" || true
+rm -f "$log"
+systemctl restart coolercontrold   # LACT hands fans to auto when it applies; give them back
+echo "applied: $(grep '^current_profile' "$CFG" || echo base) | 3090 cap $(nvidia-smi --query-gpu=power.limit --format=csv,noheader)"
