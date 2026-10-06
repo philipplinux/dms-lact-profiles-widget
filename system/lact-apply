@@ -37,6 +37,15 @@ EOF
 fi
 [ "$EUID" -eq 0 ] || exec sudo "$0" "$@"
 
+# Exact match against existing profile names only (this script is sudo-NOPASSWD for the DMS widget).
+# No control characters: a newline would let grep/awk see several names and inject config lines.
+case "${1:-}" in *[[:cntrl:]]*) echo "invalid profile name"; exit 1 ;; esac
+if [ -n "${1:-}" ] && [ "$1" != edit ] && [ "$1" != base ]; then
+  found=0
+  while IFS= read -r l; do [ "$l" = "$1" ] && found=1; done < <("$0" --list | head -n -2)
+  [ "$found" = 1 ] || { echo "no profile '$1'"; exit 1; }
+fi
+
 restart_fans() { [ -z "$FAN_DAEMON" ] || systemctl restart "$FAN_DAEMON"; }
 status() {
   local s; s=$(grep '^current_profile' "$CFG" || echo "current_profile: base")
@@ -64,11 +73,8 @@ if [ "${1:-}" = edit ]; then
   exit 0
 fi
 if [ -n "${1:-}" ]; then
-  # Exact match against existing profile names only (this script is sudo-NOPASSWD for the DMS widget)
-  if [ "$1" != base ]; then
-    "$0" --list | head -n -2 | grep -qxF -- "$1" || { echo "no profile '$1'"; exit 1; }
-  fi
-  awk -v p="$1" '/^current_profile:/{next} /^auto_switch_profiles:/ && p!="base"{print "current_profile: " p} {print}' "$CFG" > "$CFG.new" && cat "$CFG.new" > "$CFG" && rm -f "$CFG.new"
+  # Name via ENVIRON, not -v (which would expand backslash escapes)
+  P="$1" awk '/^current_profile:/{next} /^auto_switch_profiles:/ && ENVIRON["P"]!="base"{print "current_profile: " ENVIRON["P"]} {print}' "$CFG" > "$CFG.new" && cat "$CFG.new" > "$CFG" && rm -f "$CFG.new"
 fi
 # Run the daemon by hand and SIGKILL it once settings are applied: a clean stop makes LACT
 # "clean up" (power caps back to stock), and while running it re-applies on every display change.

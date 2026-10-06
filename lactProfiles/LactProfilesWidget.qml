@@ -148,7 +148,7 @@ PluginComponent {
                 height: profileGroup.height
                 readonly property int basePx: Theme.fontSizeSmall + 1
                 readonly property int labelPx: groupProbe.implicitWidth <= 0 ? basePx
-                    : Math.max(8, Math.floor(basePx * Math.min(1, (width - Theme.spacingM * 2) / groupProbe.implicitWidth)))
+                    : Math.max(Theme.fontSizeSmall - 4, Math.floor(basePx * Math.min(1, (width - Theme.spacingM * 2) / groupProbe.implicitWidth)))
 
                 // Same group at full size, only measured
                 DankButtonGroup {
@@ -187,7 +187,7 @@ PluginComponent {
             Column {
                 width: parent.width - Theme.spacingM * 2
                 anchors.horizontalCenter: parent.horizontalCenter
-                spacing: 2
+                spacing: Theme.spacingXS
 
                 Repeater {
                     model: root.profiles
@@ -237,6 +237,10 @@ PluginComponent {
         }
     }
 
-    popoutWidth: 600
-    popoutHeight: 130 + profiles.length * 20
+    // Sized from Theme tokens so larger font scales don't clip: title, button group (32 px, "small"),
+    // one row per profile, up to two status lines, plus the column spacing and padding
+    readonly property real lineHeight: Math.ceil(Theme.fontSizeSmall * 1.4)
+    popoutWidth: Theme.fontSizeSmall * 50
+    popoutHeight: Theme.spacingM * 2 + Math.ceil(Theme.fontSizeMedium * 1.4) + 32 + Theme.spacingS * 3
+        + profiles.length * (lineHeight + Theme.spacingXS) + lineHeight * 2
 }
