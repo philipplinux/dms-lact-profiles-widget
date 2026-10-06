@@ -10,11 +10,12 @@ PluginComponent {
     id: root
 
     property var profiles: []
+    property var caps: ({})   // profile -> [3090 W, RX 580 W]
     property string current: "base"
     property string busyProfile: ""
     property string lastResult: ""
 
-    function refresh() { listProc.running = true }
+    function refresh() { listProc.running = true; capsProc.running = true }
     function apply(name) {
         if (busyProfile !== "") return
         busyProfile = name
@@ -23,6 +24,12 @@ PluginComponent {
         applyProc.running = true
     }
     function label(name) { return name === "base" ? "Default" : name }
+    function capText(name) {
+        const c = caps[name]
+        if (!c) return ""
+        const w = v => v === "-" ? "stock" : v + " W"
+        return "3090 " + w(c[0]) + "  ·  RX 580 " + w(c[1])
+    }
 
     Component.onCompleted: refresh()
 
@@ -35,6 +42,21 @@ PluginComponent {
                 const cur = lines.find(l => l.startsWith("current_profile:"))
                 root.current = cur ? cur.replace("current_profile:", "").trim() : "base"
                 root.profiles = ["base"].concat(lines.filter(l => !l.startsWith("current_profile:") && l !== "base (no profile)"))
+            }
+        }
+    }
+
+    Process {
+        id: capsProc
+        command: ["/usr/local/bin/lact-apply", "--caps"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const m = {}
+                text.split("\n").filter(l => l.length > 0).forEach(l => {
+                    const f = l.split("\t")
+                    m[f[0]] = [f[1], f[2]]
+                })
+                root.caps = m
             }
         }
     }
@@ -116,6 +138,36 @@ PluginComponent {
                 }
             }
 
+            // Power limits per profile; current one highlighted
+            Column {
+                width: parent.width - Theme.spacingM * 2
+                anchors.horizontalCenter: parent.horizontalCenter
+                spacing: 2
+
+                Repeater {
+                    model: root.profiles
+                    Item {
+                        required property string modelData
+                        readonly property bool active: modelData === root.current
+                        width: parent.width
+                        height: nameText.implicitHeight
+                        StyledText {
+                            id: nameText
+                            text: root.label(modelData)
+                            font.pixelSize: Theme.fontSizeSmall
+                            font.weight: active ? Font.Medium : Font.Normal
+                            color: active ? Theme.primary : Theme.surfaceText
+                        }
+                        StyledText {
+                            anchors.right: parent.right
+                            text: root.capText(modelData)
+                            font.pixelSize: Theme.fontSizeSmall
+                            color: active ? Theme.primary : Theme.surfaceVariantText
+                        }
+                    }
+                }
+            }
+
             StyledText {
                 text: root.lastResult
                 visible: root.lastResult !== ""
@@ -130,5 +182,5 @@ PluginComponent {
     }
 
     popoutWidth: 520
-    popoutHeight: 130
+    popoutHeight: 130 + profiles.length * 20
 }
