@@ -10,7 +10,10 @@ PluginComponent {
     id: root
 
     property var profiles: []
-    property var caps: ({})   // profile -> [3090 W, RX 580 W]
+    property var gpuLabels: []   // from lact-apply --caps (GPU0, GPU1, ... or /etc/lact-apply.conf)
+    property var caps: ({})      // profile -> [W per GPU, "-" = stock]
+    // Profile shown first; Default takes its place. "" keeps the LACT config order.
+    property string firstProfile: "Eco"
     property string current: "base"
     property string busyProfile: ""
     property string lastResult: ""
@@ -24,13 +27,14 @@ PluginComponent {
         applyProc.running = true
     }
     function label(name) { return name === "base" ? "Default" : name }
-    // [3090, RX 580, total] cell texts for one profile
+    // One cell per GPU plus a total (when there are 2+ GPUs and all caps are set)
     function capCells(name) {
         const c = caps[name]
-        if (!c) return ["", "", ""]
-        const w = v => v === "-" ? "stock" : v + " W"
-        const total = c[0] !== "-" && c[1] !== "-" ? "total " + (Number(c[0]) + Number(c[1])) + " W" : ""
-        return ["3090 " + w(c[0]), "RX 580 " + w(c[1]), total]
+        if (!c) return []
+        const cells = c.map((v, i) => gpuLabels[i] + " " + (v === "-" ? "stock" : v + " W"))
+        if (c.length > 1)
+            cells.push(c.includes("-") ? "" : "total " + c.reduce((s, v) => s + Number(v), 0) + " W")
+        return cells
     }
 
     Component.onCompleted: refresh()
@@ -44,9 +48,8 @@ PluginComponent {
                 const cur = lines.find(l => l.startsWith("current_profile:"))
                 root.current = cur ? cur.replace("current_profile:", "").trim() : "base"
                 const list = ["base"].concat(lines.filter(l => !l.startsWith("current_profile:") && l !== "base (no profile)"))
-                // Owner's order: Eco first, Default where Eco would be
-                const eco = list.indexOf("Eco")
-                if (eco > 0) { list[eco] = "base"; list[0] = "Eco" }
+                const first = root.firstProfile !== "" ? list.indexOf(root.firstProfile) : -1
+                if (first > 0) { list[first] = "base"; list[0] = root.firstProfile }
                 root.profiles = list
             }
         }
@@ -60,7 +63,8 @@ PluginComponent {
                 const m = {}
                 text.split("\n").filter(l => l.length > 0).forEach(l => {
                     const f = l.split("\t")
-                    m[f[0]] = [f[1], f[2]]
+                    if (f[0] === "#gpus") root.gpuLabels = f.slice(1)
+                    else m[f[0]] = f.slice(1)
                 })
                 root.caps = m
             }
@@ -150,7 +154,7 @@ PluginComponent {
                 id: cellProbe
                 visible: false
                 font.pixelSize: Theme.fontSizeSmall
-                text: "RX 580 000 W"
+                text: root.gpuLabels.reduce((a, l) => l.length > a.length ? l : a, "total") + " 0000 W"
             }
 
             // Power limits per profile; current one highlighted

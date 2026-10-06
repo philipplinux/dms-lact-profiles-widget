@@ -1,0 +1,13 @@
+# Copy to /etc/lact-apply.conf (root-owned, mode 644) and adjust. Every setting is optional.
+# Find your PCI addresses in /etc/lact/config.yaml under `gpus:` (the part after the last dash).
+
+# GPU columns in the widget: "<PCI address>=<label>", in display order.
+# Unset = every GPU in the LACT config, labelled GPU0, GPU1, ...
+GPU_LABELS=("0000:0a:00.0=3090" "0000:0b:00.0=RX 580")
+
+# Service to restart after applying. LACT hands GPU fans back to firmware auto when it applies,
+# so a separate fan daemon (CoolerControl here) needs a restart to take them back. Unset = none.
+FAN_DAEMON=coolercontrold
+
+# Regex of LACT warnings to hide, e.g. a GPU still in the config but no longer installed.
+LOG_IGNORE="09:00.0"

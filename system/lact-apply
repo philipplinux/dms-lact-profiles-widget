@@ -2,30 +2,48 @@
 # Apply LACT power/clock settings once, then shut LACT down so it can't touch anything else.
 #   sudo lact-apply            re-apply current profile
 #   sudo lact-apply mid        switch to profile "mid" (base = no profile)
-#   sudo lact-apply --list     show profiles
-#   lact-apply --caps          show each profile's 3090 / RX 580 power caps
+#   lact-apply --list          show profiles
+#   lact-apply --caps          show each profile's power cap per GPU
 #   sudo lact-apply edit       run LACT so the GUI can change settings; Enter = save and stop
+#
+# Optional settings in /etc/lact-apply.conf (see lact-apply.conf.example).
 set -euo pipefail
 CFG=/etc/lact/config.yaml
+GPU_LABELS=()       # "<PCI address>=<label>" in display order; empty = every GPU as GPU0, GPU1, ...
+FAN_DAEMON=""       # service restarted after applying (LACT hands fans to firmware auto), e.g. coolercontrold
+LOG_IGNORE=""       # regex of LACT warnings to hide, e.g. a GPU that is no longer installed
+[ -r /etc/lact-apply.conf ] && . /etc/lact-apply.conf
+
 if [ "${1:-}" = "--list" ]; then
   awk '/^profiles:/{p=1;next} /^[a-z_]+:/{p=0} p && /^  [^ ].*:$/{sub(/:$/,"");sub(/^  /,"");print}' "$CFG"
   echo "base (no profile)"; grep '^current_profile' "$CFG" || echo "current_profile: base"; exit 0
 fi
 if [ "${1:-}" = "--caps" ]; then
-  # <profile>\t<3090 W>\t<RX 580 W> per profile ("base" = no profile, "-" = stock cap)
-  python3 -I - "$CFG" <<'EOF'
+  # First line "#gpus\t<label>...", then "<profile>\t<W>..." ("base" = no profile, "-" = stock cap)
+  python3 -I - "$CFG" "${GPU_LABELS[@]}" <<'EOF'
 import sys, yaml
 c = yaml.safe_load(open(sys.argv[1]))
-def caps(gpus):
-    w = lambda pci: next((f"{v['power_cap']:g}" for k, v in (gpus or {}).items() if k.endswith(pci) and "power_cap" in v), "-")
-    return w("0000:0a:00.0") + "\t" + w("0000:0b:00.0")
-print("base\t" + caps(c.get("gpus")))
-for name, p in (c.get("profiles") or {}).items():
-    print(name + "\t" + caps(p.get("gpus")))
+labels = [a.split("=", 1) for a in sys.argv[2:]]
+if not labels:
+    labels = [[k, f"GPU{i}"] for i, k in enumerate(c.get("gpus") or {})]
+def cap(gpus, pci):
+    return next((f"{v['power_cap']:g}" for k, v in (gpus or {}).items() if k.endswith(pci) and "power_cap" in v), "-")
+print("\t".join(["#gpus"] + [l for _, l in labels]))
+print("\t".join(["base"] + [cap(c.get("gpus"), p) for p, _ in labels]))
+for name, prof in (c.get("profiles") or {}).items():
+    print("\t".join([name] + [cap(prof.get("gpus"), p) for p, _ in labels]))
 EOF
   exit 0
 fi
 [ "$EUID" -eq 0 ] || exec sudo "$0" "$@"
+
+restart_fans() { [ -z "$FAN_DAEMON" ] || systemctl restart "$FAN_DAEMON"; }
+status() {
+  local s; s=$(grep '^current_profile' "$CFG" || echo "current_profile: base")
+  command -v nvidia-smi >/dev/null && s+=" | NVIDIA cap $(nvidia-smi --query-gpu=power.limit --format=csv,noheader | paste -sd,)"
+  echo "$1: $s"
+}
+
 systemctl stop lactd 2>/dev/null || true
 systemctl mask --runtime lactd >/dev/null 2>&1 || true
 # SIGKILL (below) leaves the socket behind; remove it unless a daemon is really running
@@ -38,11 +56,11 @@ if [ "${1:-}" = edit ]; then
   for _ in $(seq 1 30); do grep -qE "using profile|initialized [0-9]+ GPUs" "$log" && break; sleep 1; done
   echo "LACT running. Open (or reopen) the LACT GUI, change settings, click Apply."
   echo "Do NOT click Start/Autostart in its Service dialog."
-  read -rp "Press Enter when done to stop LACT and give the fans back to CoolerControl... " _ </dev/tty
+  read -rp "Press Enter when done to stop LACT... " _ </dev/tty
   kill -KILL "$pid"; wait "$pid" 2>/dev/null || true
   rm -f "$log"
-  systemctl restart coolercontrold
-  echo "done: $(grep '^current_profile' "$CFG" || echo base) | 3090 cap $(nvidia-smi --query-gpu=power.limit --format=csv,noheader)"
+  restart_fans
+  status done
   exit 0
 fi
 if [ -n "${1:-}" ]; then
@@ -60,7 +78,7 @@ pid=$!
 for _ in $(seq 1 30); do grep -qE "using profile|initialized [0-9]+ GPUs" "$log" && break; sleep 1; done
 sleep 6
 kill -KILL "$pid"; wait "$pid" 2>/dev/null || true
-grep -E "WARN|ERROR" "$log" | grep -v "09:00.0" || true
+grep -E "WARN|ERROR" "$log" | { [ -n "$LOG_IGNORE" ] && grep -vE "$LOG_IGNORE" || cat; } || true
 rm -f "$log"
-systemctl restart coolercontrold   # LACT hands fans to auto when it applies; give them back
-echo "applied: $(grep '^current_profile' "$CFG" || echo base) | 3090 cap $(nvidia-smi --query-gpu=power.limit --format=csv,noheader)"
+restart_fans
+status applied
