@@ -17,6 +17,8 @@ PluginComponent {
     property string current: "base"
     property string busyProfile: ""
     property string lastResult: ""
+    property bool scriptMissing: false
+    readonly property string readme: "https://github.com/philipplinux/dms-lact-profiles-widget"
 
     function refresh() { listProc.running = true; capsProc.running = true }
     function apply(name) {
@@ -41,10 +43,16 @@ PluginComponent {
 
     Process {
         id: listProc
-        command: ["/usr/local/bin/lact-apply", "--list"]
+        command: ["sh", "-c", "[ -x /usr/local/bin/lact-apply ] && exec /usr/local/bin/lact-apply --list || echo '#missing'"]
         stdout: StdioCollector {
             onStreamFinished: {
                 const lines = text.split("\n").filter(l => l.length > 0)
+                root.scriptMissing = lines[0] === "#missing"
+                if (root.scriptMissing) {
+                    root.profiles = []
+                    root.lastResult = "lact-apply is not installed. This widget needs manual setup: see " + root.readme
+                    return
+                }
                 const cur = lines.find(l => l.startsWith("current_profile:"))
                 root.current = cur ? cur.replace("current_profile:", "").trim() : "base"
                 const list = ["base"].concat(lines.filter(l => !l.startsWith("current_profile:") && l !== "base (no profile)"))
@@ -80,7 +88,7 @@ PluginComponent {
             }
         }
         onExited: code => {
-            if (code !== 0 && root.lastResult.startsWith("Applying")) root.lastResult = "Failed (exit " + code + ")"
+            if (code !== 0 && root.lastResult.startsWith("Applying")) root.lastResult = "Failed (exit " + code + "). Is the sudoers rule installed? See " + root.readme
             root.busyProfile = ""
             root.refresh()
         }
@@ -129,6 +137,7 @@ PluginComponent {
             // Same control as the DMS battery popout's power-profile selector
             Item {
                 width: parent.width
+                visible: !root.scriptMissing
                 height: profileGroup.height * profileGroup.scale
 
                 DankButtonGroup {
