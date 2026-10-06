@@ -24,12 +24,13 @@ PluginComponent {
         applyProc.running = true
     }
     function label(name) { return name === "base" ? "Default" : name }
-    function capText(name) {
+    // [3090, RX 580, total] cell texts for one profile
+    function capCells(name) {
         const c = caps[name]
-        if (!c) return ""
+        if (!c) return ["", "", ""]
         const w = v => v === "-" ? "stock" : v + " W"
-        const total = c[0] !== "-" && c[1] !== "-" ? "  ·  total " + (Number(c[0]) + Number(c[1])) + " W" : ""
-        return "3090 " + w(c[0]) + "  ·  RX 580 " + w(c[1]) + total
+        const total = c[0] !== "-" && c[1] !== "-" ? "total " + (Number(c[0]) + Number(c[1])) + " W" : ""
+        return ["3090 " + w(c[0]), "RX 580 " + w(c[1]), total]
     }
 
     Component.onCompleted: refresh()
@@ -129,6 +130,7 @@ PluginComponent {
                 DankButtonGroup {
                     id: profileGroup
                     size: "small"
+                    textSize: Theme.fontSizeSmall + 1
                     scale: Math.min(1, (parent.width - Theme.spacingM * 2) / implicitWidth)
                     transformOrigin: Item.Center
                     anchors.horizontalCenter: parent.horizontalCenter
@@ -141,6 +143,14 @@ PluginComponent {
                             root.apply(root.profiles[index])
                     }
                 }
+            }
+
+            // Widest cell text, measured with the same component the cells use
+            StyledText {
+                id: cellProbe
+                visible: false
+                font.pixelSize: Theme.fontSizeSmall
+                text: "RX 580 000 W"
             }
 
             // Power limits per profile; current one highlighted
@@ -163,11 +173,22 @@ PluginComponent {
                             font.weight: active ? Font.Medium : Font.Normal
                             color: active ? Theme.primary : Theme.surfaceText
                         }
-                        StyledText {
+                        // Right-aligned fixed-width cells so the W columns line up
+                        Row {
                             anchors.right: parent.right
-                            text: root.capText(modelData)
-                            font.pixelSize: Theme.fontSizeSmall
-                            color: active ? Theme.primary : Theme.surfaceVariantText
+                            spacing: Theme.spacingL
+                            Repeater {
+                                model: root.capCells(modelData)
+                                StyledText {
+                                    required property string modelData
+                                    width: cellProbe.implicitWidth
+                                    wrapMode: Text.NoWrap
+                                    horizontalAlignment: Text.AlignRight
+                                    text: modelData
+                                    font.pixelSize: Theme.fontSizeSmall
+                                    color: active ? Theme.primary : Theme.surfaceVariantText
+                                }
+                            }
                         }
                     }
                 }
@@ -186,6 +207,6 @@ PluginComponent {
         }
     }
 
-    popoutWidth: 520
+    popoutWidth: 600
     popoutHeight: 130 + profiles.length * 20
 }

@@ -1,12 +1,16 @@
-# dms-lact-profiles
+# dms-lact-profiles-widget
 
 DankMaterialShell bar widget to switch [LACT](https://github.com/ilya-zlobintsev/LACT) GPU profiles.
 The bar pill shows the active profile; the popout is a button group (same control as the DMS
-power-profile selector) with Default plus every profile in `/etc/lact/config.yaml`.
+power-profile selector) with Default plus every profile in `/etc/lact/config.yaml`. Below it, each
+profile's power limits for both GPUs and their total, read straight from the config.
+
+![LACT profile popout](docs/screenshot.png)
 
 ## How it works
 
-- `lactProfiles/` is the DMS plugin. It runs `lact-apply --list` to read profiles and
+- `lactProfiles/` is the DMS plugin. It runs `lact-apply --list` to read profiles,
+  `lact-apply --caps` to read their power limits, and
   `sudo -n lact-apply <name>` to switch.
 - `system/lact-apply` (installed at `/usr/local/bin/lact-apply`) sets `current_profile`, starts
   `lact daemon` once to apply the caps, then SIGKILLs it so the caps stay and CoolerControl keeps
