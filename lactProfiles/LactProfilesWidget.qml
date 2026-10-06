@@ -42,7 +42,11 @@ PluginComponent {
                 const lines = text.split("\n").filter(l => l.length > 0)
                 const cur = lines.find(l => l.startsWith("current_profile:"))
                 root.current = cur ? cur.replace("current_profile:", "").trim() : "base"
-                root.profiles = ["base"].concat(lines.filter(l => !l.startsWith("current_profile:") && l !== "base (no profile)"))
+                const list = ["base"].concat(lines.filter(l => !l.startsWith("current_profile:") && l !== "base (no profile)"))
+                // Owner's order: Eco first, Default where Eco would be
+                const eco = list.indexOf("Eco")
+                if (eco > 0) { list[eco] = "base"; list[0] = "Eco" }
+                root.profiles = list
             }
         }
     }
