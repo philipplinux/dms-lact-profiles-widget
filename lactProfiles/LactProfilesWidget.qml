@@ -9,7 +9,14 @@ import qs.Modules.Plugins
 PluginComponent {
     id: root
 
-    property var profiles: []
+    property var configProfiles: []   // "base" + LACT profiles in config order
+    // Display order; recomputed when the firstProfile setting arrives or changes
+    readonly property var profiles: {
+        const list = configProfiles.slice()
+        const first = firstProfile !== "" ? list.indexOf(firstProfile) : -1
+        if (first > 0) { list[first] = list[0]; list[0] = firstProfile }
+        return list
+    }
     property var gpuLabels: []   // from lact-apply --caps (GPU0, GPU1, ... or /etc/lact-apply.conf)
     property var caps: ({})      // profile -> [W per GPU, "-" = stock]
     // Profile shown first (plugin setting); Default takes its place. "" keeps the LACT config order.
@@ -49,16 +56,13 @@ PluginComponent {
                 const lines = text.split("\n").filter(l => l.length > 0)
                 root.scriptMissing = lines[0] === "#missing"
                 if (root.scriptMissing) {
-                    root.profiles = []
+                    root.configProfiles = []
                     root.lastResult = "lact-apply is not installed. This widget needs manual setup: see " + root.readme
                     return
                 }
                 const cur = lines.find(l => l.startsWith("current_profile:"))
                 root.current = cur ? cur.replace("current_profile:", "").trim() : "base"
-                const list = ["base"].concat(lines.filter(l => !l.startsWith("current_profile:") && l !== "base (no profile)"))
-                const first = root.firstProfile !== "" ? list.indexOf(root.firstProfile) : -1
-                if (first > 0) { list[first] = "base"; list[0] = root.firstProfile }
-                root.profiles = list
+                root.configProfiles = ["base"].concat(lines.filter(l => !l.startsWith("current_profile:") && l !== "base (no profile)"))
             }
         }
     }
