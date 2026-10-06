@@ -135,23 +135,54 @@ PluginComponent {
                 topPadding: Theme.spacingM
             }
 
-            // Same control as the DMS battery popout's power-profile selector
+            // Same control as the DMS battery popout's power-profile selector.
+            // Labels shrink in 0.5 px steps to fit (a fractional scale blurs the glyphs).
             Item {
+                id: groupBox
                 width: parent.width
                 visible: !root.scriptMissing
-                height: profileGroup.height * profileGroup.scale
+                height: profileGroup.height
+                readonly property int basePx: Theme.fontSizeSmall + 1
+                readonly property real labelPx: groupProbe.implicitWidth <= 0 ? basePx
+                    : Math.max(8, Math.floor(basePx * Math.min(1, (width - Theme.spacingM * 2) * 0.97 / groupProbe.implicitWidth) * 2) / 2)
+
+                // Same group at full size, only measured
+                DankButtonGroup {
+                    id: groupProbe
+                    visible: false
+                    size: "small"
+                    textSize: groupBox.basePx
+                    model: profileGroup.model
+                }
 
                 DankButtonGroup {
                     id: profileGroup
                     size: "small"
-                    textSize: Theme.fontSizeSmall + 1
-                    scale: Math.min(1, (parent.width - Theme.spacingM * 2) / implicitWidth)
-                    transformOrigin: Item.Center
+                    textSize: groupBox.basePx
                     anchors.horizontalCenter: parent.horizontalCenter
                     model: root.profiles.map(p => root.label(p))
                     currentIndex: root.profiles.indexOf(root.busyProfile !== "" ? root.busyProfile : root.current)
                     selectionMode: "single"
                     enabled: root.busyProfile === ""
+                    // DankButtonGroup hardcodes the label font; rebind size and weight (selected = Bold)
+                    function restyle(item) {
+                        for (const c of item.children) {
+                            if (c.selected !== undefined) {
+                                const seg = c
+                                const walk = n => {
+                                    for (const k of n.children) {
+                                        if (k.capAvailable !== undefined) {
+                                            k.font.pixelSize = Qt.binding(() => groupBox.labelPx)
+                                            k.font.weight = Qt.binding(() => seg.selected ? Font.Bold : Font.Normal)
+                                        } else walk(k)
+                                    }
+                                }
+                                walk(seg)
+                            } else restyle(c)
+                        }
+                    }
+                    onModelChanged: Qt.callLater(() => restyle(profileGroup))
+                    Component.onCompleted: Qt.callLater(() => restyle(profileGroup))
                     onSelectionChanged: (index, selected) => {
                         if (selected && root.profiles[index] !== root.current)
                             root.apply(root.profiles[index])
