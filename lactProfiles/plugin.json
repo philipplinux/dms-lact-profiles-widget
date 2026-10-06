@@ -2,12 +2,19 @@
     "id": "lactProfiles",
     "name": "LACT Profiles",
     "description": "Switch LACT GPU power profiles via lact-apply (applies once, then LACT exits)",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "author": "philipp",
     "type": "widget",
-    "capabilities": ["dankbar-widget"],
+    "capabilities": [
+        "dankbar-widget"
+    ],
     "component": "./LactProfilesWidget.qml",
+    "settings": "./LactProfilesSettings.qml",
     "icon": "bolt",
     "requires_dms": ">=1.2.0",
-    "permissions": ["process"]
+    "permissions": [
+        "settings_read",
+        "settings_write",
+        "process"
+    ]
 }

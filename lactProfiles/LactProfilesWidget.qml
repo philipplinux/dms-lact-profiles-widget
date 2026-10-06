@@ -12,8 +12,8 @@ PluginComponent {
     property var profiles: []
     property var gpuLabels: []   // from lact-apply --caps (GPU0, GPU1, ... or /etc/lact-apply.conf)
     property var caps: ({})      // profile -> [W per GPU, "-" = stock]
-    // Profile shown first; Default takes its place. "" keeps the LACT config order.
-    property string firstProfile: "Eco"
+    // Profile shown first (plugin setting); Default takes its place. "" keeps the LACT config order.
+    property string firstProfile: (pluginData.firstProfile ?? "").trim()
     property string current: "base"
     property string busyProfile: ""
     property string lastResult: ""
@@ -136,15 +136,15 @@ PluginComponent {
             }
 
             // Same control as the DMS battery popout's power-profile selector.
-            // Labels shrink in 0.5 px steps to fit (a fractional scale blurs the glyphs).
+            // Labels shrink in whole px steps to fit (a fractional scale blurs the glyphs).
             Item {
                 id: groupBox
                 width: parent.width
                 visible: !root.scriptMissing
                 height: profileGroup.height
                 readonly property int basePx: Theme.fontSizeSmall + 1
-                readonly property real labelPx: groupProbe.implicitWidth <= 0 ? basePx
-                    : Math.max(8, Math.floor(basePx * Math.min(1, (width - Theme.spacingM * 2) * 0.97 / groupProbe.implicitWidth) * 2) / 2)
+                readonly property int labelPx: groupProbe.implicitWidth <= 0 ? basePx
+                    : Math.max(8, Math.floor(basePx * Math.min(1, (width - Theme.spacingM * 2) / groupProbe.implicitWidth)))
 
                 // Same group at full size, only measured
                 DankButtonGroup {
@@ -158,31 +158,12 @@ PluginComponent {
                 DankButtonGroup {
                     id: profileGroup
                     size: "small"
-                    textSize: groupBox.basePx
+                    textSize: groupBox.labelPx
                     anchors.horizontalCenter: parent.horizontalCenter
                     model: root.profiles.map(p => root.label(p))
                     currentIndex: root.profiles.indexOf(root.busyProfile !== "" ? root.busyProfile : root.current)
                     selectionMode: "single"
                     enabled: root.busyProfile === ""
-                    // DankButtonGroup hardcodes the label font; rebind size and weight (selected = Bold)
-                    function restyle(item) {
-                        for (const c of item.children) {
-                            if (c.selected !== undefined) {
-                                const seg = c
-                                const walk = n => {
-                                    for (const k of n.children) {
-                                        if (k.capAvailable !== undefined) {
-                                            k.font.pixelSize = Qt.binding(() => groupBox.labelPx)
-                                            k.font.weight = Qt.binding(() => seg.selected ? Font.Bold : Font.Normal)
-                                        } else walk(k)
-                                    }
-                                }
-                                walk(seg)
-                            } else restyle(c)
-                        }
-                    }
-                    onModelChanged: Qt.callLater(() => restyle(profileGroup))
-                    Component.onCompleted: Qt.callLater(() => restyle(profileGroup))
                     onSelectionChanged: (index, selected) => {
                         if (selected && root.profiles[index] !== root.current)
                             root.apply(root.profiles[index])

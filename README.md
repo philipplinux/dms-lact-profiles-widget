@@ -21,7 +21,7 @@ profile's power limit per GPU and their total, read straight from the config.
 |---|---|
 | `system/sudoers-lact-apply` | Replace `philipp` with your user name. |
 | `/etc/lact-apply.conf` (optional, from `system/lact-apply.conf.example`) | Your GPU labels by PCI address, the fan service to restart (if any), LACT warnings to hide. Without it, GPUs show as GPU0, GPU1, ... and no service is restarted. |
-| `lactProfiles/LactProfilesWidget.qml` | `firstProfile: "Eco"` puts that profile first (Default takes its slot). Set `""` to keep the config order. |
+| Plugin settings (DMS Settings, Plugins, LACT Profiles) | "First profile": the profile shown first (Default takes its slot). Empty keeps the config order. |
 
 Profiles themselves are made in LACT (`sudo lact-apply edit`, then the LACT GUI); the widget
 just lists whatever is in `/etc/lact/config.yaml`.
