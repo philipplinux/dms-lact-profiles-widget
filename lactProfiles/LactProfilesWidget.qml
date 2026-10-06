@@ -28,7 +28,8 @@ PluginComponent {
         const c = caps[name]
         if (!c) return ""
         const w = v => v === "-" ? "stock" : v + " W"
-        return "3090 " + w(c[0]) + "  ·  RX 580 " + w(c[1])
+        const total = c[0] !== "-" && c[1] !== "-" ? "  ·  total " + (Number(c[0]) + Number(c[1])) + " W" : ""
+        return "3090 " + w(c[0]) + "  ·  RX 580 " + w(c[1]) + total
     }
 
     Component.onCompleted: refresh()
