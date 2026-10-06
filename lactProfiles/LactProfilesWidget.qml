@@ -126,11 +126,12 @@ PluginComponent {
             width: parent ? parent.width : 280
 
             StyledText {
-                text: "GPU power profile"
+                text: "GPU Power Profile"
+                width: parent.width
+                horizontalAlignment: Text.AlignHCenter
                 font.pixelSize: Theme.fontSizeMedium
                 font.weight: Font.Medium
                 color: Theme.surfaceText
-                leftPadding: Theme.spacingM
                 topPadding: Theme.spacingM
             }
 
